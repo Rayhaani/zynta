@@ -340,7 +340,22 @@ body { padding-bottom: 140px; }
     padding: 7px 14px;
     white-space: nowrap;
 }
-  
+
+  /* ---- Deposit sheet ---- */
+  #dep-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.65); backdrop-filter:blur(6px); z-index:99990; opacity:0; pointer-events:none; transition:opacity .3s ease; }
+  #dep-overlay.active{ opacity:1; pointer-events:auto; }
+  #dep-sheet{ position:fixed; left:0; right:0; bottom:0; max-width:480px; margin:0 auto; max-height:88vh; overflow-y:auto; z-index:99991; background:#0d0f14; border-top:1px solid rgba(167,139,250,0.3); border-radius:24px 24px 0 0; padding:18px 20px 28px; transform:translateY(100%); transition:transform .35s cubic-bezier(.16,1,.3,1); }
+  #dep-sheet.active{ transform:translateY(0); }
+  .dep-handle{ width:40px; height:4px; border-radius:4px; background:rgba(255,255,255,0.15); margin:0 auto 16px; }
+  .dep-tabs{ display:flex; gap:8px; margin:16px 0 14px; }
+  .dep-tab{ flex:1; text-align:center; padding:11px; border-radius:12px; font-size:12px; font-weight:700; color:rgba(255,255,255,0.5); background:rgba(255,255,255,0.03); border:1px solid var(--line); cursor:pointer; }
+  .dep-tab.active{ color:#0d0f14; background:linear-gradient(90deg,var(--vonk-a),var(--vonk-b)); border-color:transparent; }
+  .dep-label{ display:block; font-size:11px; font-weight:600; color:rgba(255,255,255,0.45); margin:12px 0 6px; }
+  .dep-input{ width:100%; background:#020617; border:1px solid rgba(148,163,184,0.15); border-radius:12px; padding:12px 14px; font-size:13px; color:#fff; outline:none; font-family:inherit; }
+  .dep-input:focus{ border-color:var(--vonk-a); }
+  .dep-box{ background:rgba(255,255,255,0.03); border:1px solid var(--line); border-radius:12px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; word-break:break-all; }
+  .dep-copy{ flex-shrink:0; font-size:10px; font-weight:700; color:var(--vonk-a); background:none; border:1px solid rgba(167,139,250,0.35); border-radius:8px; padding:5px 10px; cursor:pointer; }
+  .dep-note{ font-size:10.5px; color:rgba(255,255,255,0.4); line-height:1.5; margin-top:8px; }
 </style>
 </head>
 <body class="pb-10">
@@ -447,7 +462,7 @@ body { padding-bottom: 140px; }
 
     <!-- ===== Quick Actions ===== -->
     <section class="grid grid-cols-3 gap-3">
-      <button class="card p-4 flex flex-col items-center gap-2 pressable">
+      <button onclick="openDeposit()" class="card p-4 flex flex-col items-center gap-2 pressable">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
         <span class="text-xs text-white/70">Deposit</span>
       </button>
@@ -565,6 +580,51 @@ body { padding-bottom: 140px; }
     </div>
 </nav>
 
+<div id="dep-overlay" onclick="closeDeposit()"></div>
+<div id="dep-sheet">
+  <div class="dep-handle"></div>
+  <h2 style="font-size:16px; font-weight:700; margin:0;">Deposit Funds</h2>
+  <p style="font-size:11.5px; color:rgba(255,255,255,0.45); margin:4px 0 0;">Add funds to your wallet. Your balance is credited after we confirm your payment.</p>
+
+  <div class="dep-tabs">
+    <div id="dep-tab-usdt" class="dep-tab active" onclick="setDepMethod('usdt')">USDT</div>
+    <div id="dep-tab-bank" class="dep-tab" onclick="setDepMethod('bank')">Bank Transfer</div>
+  </div>
+
+  <label class="dep-label">Amount (USD)</label>
+  <input type="number" id="dep-amount" class="dep-input" placeholder="50" min="1" step="1" oninput="updateDepNgn()">
+
+  <div id="dep-panel-usdt">
+    <label class="dep-label">Network</label>
+    <select id="dep-network" class="dep-input" onchange="updateDepAddress()">
+      <option value="TRC20">USDT — TRC20 (Tron)</option>
+      <option value="BEP20">USDT — BEP20 (BNB Smart Chain)</option>
+    </select>
+    <label class="dep-label">Send to this address</label>
+    <div class="dep-box"><span id="dep-address"></span><button class="dep-copy" onclick="copyDepText('dep-address')">COPY</button></div>
+    <p class="dep-note">Send only USDT on the selected network. Funds sent on a different network cannot be recovered.</p>
+    <label class="dep-label">Transaction ID (TXID)</label>
+    <input type="text" id="dep-txid" class="dep-input" placeholder="Paste your transaction hash">
+  </div>
+
+  <div id="dep-panel-bank" style="display:none;">
+    <label class="dep-label">Amount to transfer</label>
+    <div class="dep-box"><span id="dep-ngn">₦0</span></div>
+    <label class="dep-label">Bank details</label>
+    <div class="dep-box" style="flex-direction:column; align-items:flex-start;">
+      <span id="dep-bank-name"></span>
+      <span id="dep-bank-acc"></span>
+      <span id="dep-bank-accname"></span>
+    </div>
+    <label class="dep-label">Payment reference (put this in the transfer narration)</label>
+    <div class="dep-box"><span id="dep-reference"></span><button class="dep-copy" onclick="copyDepText('dep-reference')">COPY</button></div>
+    <label class="dep-label">Sender account name</label>
+    <input type="text" id="dep-sender" class="dep-input" placeholder="Name on the account you sent from">
+  </div>
+
+  <button id="dep-submit" onclick="submitDeposit()" class="pressable w-full font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider" style="margin-top:18px; background:linear-gradient(90deg,var(--vonk-a),var(--vonk-b)); color:#020617;">Submit Deposit Request</button>
+</div>
+  
 <div id="profile-sheet-overlay" onclick="closeProfileSheet()"></div>
 
 <div id="profile-sheet">
@@ -872,6 +932,141 @@ window.scrollToTasks = scrollToTasks;
 window.openProfileSheet = openProfileSheet;
 window.closeProfileSheet = closeProfileSheet;
 window.updateDockTaskRing = updateDockTaskRing;
+  /* ── DEPOSIT REQUEST ─────────────────────────────────────────
+     Fill in YOUR real payment details below before going live.
+     Any value starting with PASTE_ is treated as "not configured". */
+  const DEPOSIT_CONFIG = {
+    minUSD: 10,
+    ngnPerUsd: 1600, // update this whenever your bank rate changes
+    usdt: {
+      TRC20: 'PASTE_YOUR_TRC20_ADDRESS',
+      BEP20: 'PASTE_YOUR_BEP20_ADDRESS'
+    },
+    bank: {
+      bankName: 'PASTE_BANK_NAME',
+      accountNumber: 'PASTE_ACCOUNT_NUMBER',
+      accountName: 'PASTE_ACCOUNT_NAME'
+    }
+  };
+
+  let depMethod = 'usdt';
+  let depReference = '';
+
+  function depIsPlaceholder(v){ return !v || String(v).startsWith('PASTE_'); }
+
+  function openDeposit(){
+    if (!currentUser) { alert('Please login first!'); return; }
+    depReference = 'ZYN-' + currentUser.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) + '-' + Math.floor(1000 + Math.random() * 9000);
+    document.getElementById('dep-reference').textContent = depReference;
+    setDepMethod('usdt');
+    updateDepAddress();
+    updateDepNgn();
+    document.getElementById('dep-overlay').classList.add('active');
+    document.getElementById('dep-sheet').classList.add('active');
+  }
+
+  function closeDeposit(){
+    document.getElementById('dep-overlay').classList.remove('active');
+    document.getElementById('dep-sheet').classList.remove('active');
+  }
+
+  function setDepMethod(m){
+    depMethod = m;
+    document.getElementById('dep-tab-usdt').classList.toggle('active', m === 'usdt');
+    document.getElementById('dep-tab-bank').classList.toggle('active', m === 'bank');
+    document.getElementById('dep-panel-usdt').style.display = (m === 'usdt') ? 'block' : 'none';
+    document.getElementById('dep-panel-bank').style.display = (m === 'bank') ? 'block' : 'none';
+    const b = DEPOSIT_CONFIG.bank;
+    const na = 'Not available yet';
+    document.getElementById('dep-bank-name').textContent = depIsPlaceholder(b.bankName) ? na : 'Bank: ' + b.bankName;
+    document.getElementById('dep-bank-acc').textContent = depIsPlaceholder(b.accountNumber) ? '' : 'Account No: ' + b.accountNumber;
+    document.getElementById('dep-bank-accname').textContent = depIsPlaceholder(b.accountName) ? '' : 'Account Name: ' + b.accountName;
+  }
+
+  function updateDepAddress(){
+    const net = document.getElementById('dep-network').value;
+    const addr = DEPOSIT_CONFIG.usdt[net];
+    document.getElementById('dep-address').textContent = depIsPlaceholder(addr) ? 'Not available yet' : addr;
+  }
+
+  function updateDepNgn(){
+    const usd = parseInt(document.getElementById('dep-amount').value, 10) || 0;
+    document.getElementById('dep-ngn').textContent = '₦' + (usd * DEPOSIT_CONFIG.ngnPerUsd).toLocaleString('en-US');
+  }
+
+  function copyDepText(id){
+    const t = document.getElementById(id).textContent;
+    if (navigator.clipboard) { navigator.clipboard.writeText(t).then(() => alert('Copied!')).catch(() => {}); }
+  }
+
+  async function submitDeposit(){
+    if (!currentUser) { alert('Please login first!'); return; }
+    const amount = parseInt(document.getElementById('dep-amount').value, 10);
+    if (!amount || amount < DEPOSIT_CONFIG.minUSD) { alert('Minimum deposit is $' + DEPOSIT_CONFIG.minUSD + '.'); return; }
+
+    const data = { userId: currentUser, method: depMethod, amountUSD: amount, status: 'pending' };
+
+    if (depMethod === 'usdt') {
+      const net = document.getElementById('dep-network').value;
+      const addr = DEPOSIT_CONFIG.usdt[net];
+      const txid = document.getElementById('dep-txid').value.trim();
+      if (depIsPlaceholder(addr)) { alert('This network is not available yet.'); return; }
+      if (!/^(0x)?[a-fA-F0-9]{64}$/.test(txid)) { alert('Please enter a valid transaction ID (TXID).'); return; }
+      data.network = net;
+      data.toAddress = addr;
+      data.txid = txid.toLowerCase();
+    } else {
+      const b = DEPOSIT_CONFIG.bank;
+      const sender = document.getElementById('dep-sender').value.trim();
+      if (depIsPlaceholder(b.accountNumber)) { alert('Bank transfer is not available yet.'); return; }
+      if (sender.length < 3) { alert("Please enter the sender's account name."); return; }
+      data.reference = depReference;
+      data.senderName = sender;
+      data.ngnRate = DEPOSIT_CONFIG.ngnPerUsd;
+      data.ngnExpected = amount * DEPOSIT_CONFIG.ngnPerUsd;
+    }
+
+    const btn = document.getElementById('dep-submit');
+    btn.disabled = true;
+    try {
+      const depRef = db.collection('deposits').doc();
+      const txRef = db.collection('users').doc(currentUser).collection('transactions').doc();
+      const batch = db.batch();
+      batch.set(depRef, Object.assign({}, data, {
+        txDocId: txRef.id,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }));
+      batch.set(txRef, {
+        type: 'Deposit',
+        desc: depMethod === 'usdt' ? 'USDT deposit (awaiting confirmation)' : 'Bank transfer deposit (awaiting confirmation)',
+        amount: amount,
+        unit: 'USD',
+        status: 'Pending',
+        depositId: depRef.id,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await batch.commit();
+
+      alert('Deposit request submitted. Your balance will be credited once we confirm your payment.');
+      document.getElementById('dep-amount').value = '';
+      document.getElementById('dep-txid').value = '';
+      document.getElementById('dep-sender').value = '';
+      closeDeposit();
+    } catch (err) {
+      console.error(err);
+      alert('Could not submit your request. Please try again.');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  window.openDeposit = openDeposit;
+  window.closeDeposit = closeDeposit;
+  window.setDepMethod = setDepMethod;
+  window.updateDepAddress = updateDepAddress;
+  window.updateDepNgn = updateDepNgn;
+  window.copyDepText = copyDepText;
+  window.submitDeposit = submitDeposit;
 
 setDockActive(0);
 window.addEventListener('load', loadWallet);
